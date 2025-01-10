@@ -1,11 +1,23 @@
 // import { getBaseUrl } from './api-helpers';
+export interface ApiResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+}
 
-export const getBaseUrl = () => {
-  if (typeof window !== 'undefined') return ''; // browser should use relative url
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`; // SSR should use vercel url
-  return `http://localhost:${process.env.PORT ?? 3000}`; // dev SSR should use localhost
-};
-
+export interface OtpResponse extends ApiResponse {
+  expiresAt?: string;
+}
+function getApiUrl(path: string): string {
+  // If we're in the browser, use relative paths
+  if (typeof window !== 'undefined') {
+    return path;
+  }
+  
+  // For server-side calls, use full URL
+  const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+  return `${baseUrl}${path}`;
+}
 export async function sendOtpEmail(email: string) {
     try {
       const res = await fetch('/api/email', {
@@ -27,28 +39,38 @@ export async function sendOtpEmail(email: string) {
     }
   }
   
-  export async function verifyOtp(email: string, otp: string) {
+  export async function verifyOtp(email: string, otp: string): Promise<ApiResponse> {
     try {
-      const res = await fetch(`${process.env.NEXTAUTH_URL}/api/verify-otp`, {
+      const res = await fetch(getApiUrl('/api/verify-otp'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         body: JSON.stringify({ email, otp }),
       });
-      
-      const data = await res.json();
-      
-      // Log response for debugging
-      console.log('OTP verification response:', data);
+  
+      // Handle non-JSON responses
+      const contentType = res.headers.get('content-type');
+      if (!contentType?.includes('application/json')) {
+        throw new Error('Invalid server response');
+      }
+  
+      const data: ApiResponse = await res.json();
       
       if (!res.ok || !data.success) {
-        throw new Error(data.message || 'Failed to verify OTP');
+        throw new Error(data.message || data.error || 'Failed to verify OTP');
       }
-      
-      return data;
+  
+      return {
+        success: true,
+        message: data.message,
+      };
     } catch (error) {
-      console.error('Error verifying OTP:', error);
-      throw error;
+      console.error('Verify OTP error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to verify OTP',
+      };
     }
   }

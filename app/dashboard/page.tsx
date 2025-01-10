@@ -1,5 +1,4 @@
 "use client";
-
 import { useSession, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -30,7 +29,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-md p-4 flex justify-between items-center">
         <h1 className="text-lg font-semibold">Dashboard</h1>
-        <Button onClick={() => signOut()} className="bg-red-500 text-white">
+        <Button onClick={() => signOut()} className="mr-8 red-500 text-black">
           Logout
         </Button>
       </header>

@@ -5,11 +5,8 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { sendOtpEmail, verifyOtp } from "@/utils/auth";
+import { ApiResponse } from '@/utils/auth';
 
-interface AuthResponse {
-  success: boolean;
-  error?: string;
-}
 
 export default function LoginClient() {
   const router = useRouter();
@@ -82,7 +79,7 @@ export default function LoginClient() {
     setError("");
 
     try {
-      const verificationResult = await verifyOtp(email, otp);
+      const verificationResult: ApiResponse = await verifyOtp(email, otp);
       
       if (verificationResult.success) {
         const result = await signIn("credentials", {

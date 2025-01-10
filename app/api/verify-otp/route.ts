@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     }
 
     // Delete the used OTP
-    await Otp.deleteOne({ email, otp });
+    // await Otp.deleteOne({ email, otp });
     
     return NextResponse.json({
       success: true,
