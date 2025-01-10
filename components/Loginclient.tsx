@@ -1,80 +1,115 @@
-
 "use client"
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { sendOtpEmail, verifyOtp} from "@/lib/otpService";
-export default function Loginclient() {
+import { sendOtpEmail, verifyOtp } from "@/utils/auth";
+
+interface AuthResponse {
+  success: boolean;
+  error?: string;
+}
+
+export default function LoginClient() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [countdown, setCountdown] = useState(0);
 
-  // const sendOtp = async () => {
-  //   if (!email) {
-  //     setError("Please enter your email");
-  //     return;
-  //   }
+  const startCountdown = () => {
+    setCountdown(30);
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
-  //   setLoading(true);
-  //   setError("");
+  const isValidEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
 
-  //   try {
-  //     // Call your API to send OTP
-  //     const response = await fetch('/api/auth/send-otp', {
-  //       method: 'POST',
-  //       headers: {
-  //         'Content-Type': 'application/json',
-  //       },
-  //       body: JSON.stringify({ email }),
-  //     });
+  async function handleSendOtpEmail() {
+    if (!email) {
+      setError("Please enter your email");
+      return;
+    }
 
-  //     const data = await response.json();
+    if (!isValidEmail(email)) {
+      setError("Please enter a valid email address");
+      return;
+    }
 
-  //     if (!response.ok) {
-  //       throw new Error(data.error || 'Failed to send OTP');
-  //     }
+    setLoading(true);
+    setError("");
 
-  //     setIsOtpSent(true);
-  //     setError("");
-  //   } catch (err) {
-  //     setError("Error");
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
+    try {
+      const response = await sendOtpEmail(email);
+      if (response.success) {
+        setIsOtpSent(true);
+        setError("");
+        startCountdown();
+      } else {
+        throw new Error(response.error || "Failed to send OTP");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send OTP. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+  
+  async function handleVerifyOtp() {
+    if (!otp) {
+      setError("Please enter the OTP");
+      return;
+    }
 
-  // const verifyOtp = async () => {
-  //   if (!otp) {
-  //     setError("Please enter the OTP");
-  //     return;
-  //   }
+    if (otp.length !== 6) {
+      setError("Please enter a valid 6-digit OTP");
+      return;
+    }
 
-  //   setLoading(true);
-  //   setError("");
+    setLoading(true);
+    setError("");
 
-  //   try {
-  //     const result = await signIn("credentials", {
-  //       email,
-  //       otp,
-  //       redirect: false,
-  //     });
-  //     if (result?.error) {
-  //       throw new Error(result.error);
-  //     }
+    try {
+      const verificationResult = await verifyOtp(email, otp);
+      
+      if (verificationResult.success) {
+        const result = await signIn("credentials", {
+          email,
+          otp,
+          redirect: false,
+        });
 
-  //     // If successful, redirect to dashboard
-  //     router.push('/dashboard');
-  //   } catch (err) {
-  //     setError("Error");
-  //     setLoading(false);
-  //   }
-  // };
+        if (result?.error) {
+          throw new Error(result.error);
+        }
+
+        setEmail("");
+        setOtp("");
+        setIsOtpSent(false);
+        
+        router.push('/dashboard');
+        router.refresh();
+      } else {
+        throw new Error(verificationResult.error || "Invalid OTP");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to verify OTP");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div className="flex justify-center items-center min-h-screen bg-gray-50">
@@ -96,7 +131,10 @@ export default function Loginclient() {
               type="email"
               placeholder="Enter your email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setError("");
+              }}
               disabled={isOtpSent || loading}
               className="w-full"
             />
@@ -109,33 +147,48 @@ export default function Loginclient() {
               </label>
               <Input
                 type="text"
-                placeholder="Enter OTP"
+                placeholder="Enter 6-digit OTP"
                 value={otp}
-                onChange={(e) => setOtp(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9]/g, '');
+                  if (value.length <= 6) {
+                    setOtp(value);
+                    setError("");
+                  }
+                }}
                 disabled={loading}
                 className="w-full"
                 maxLength={6}
               />
+              {countdown > 0 && (
+                <p className="text-sm text-gray-500 mt-1">
+                  Resend OTP in {countdown}s
+                </p>
+              )}
+              {countdown === 0 && isOtpSent && (
+                <button
+                  onClick={() => {
+                    setOtp("");
+                    handleSendOtpEmail();
+                  }}
+                  className="text-sm text-blue-600 hover:text-blue-800 mt-1"
+                  disabled={loading}
+                >
+                  Resend OTP
+                </button>
+              )}
             </div>
           )}
 
-          {!isOtpSent ? (
-            <Button 
-              onClick={sendOtpEmail} 
-              className="w-full"
-              disabled={loading}
-            >
-              {loading ? "Sending..." : "Send OTP"}
-            </Button>
-          ) : (
-            <Button 
-              onClick={verifyOtp} 
-              className="w-full"
-              disabled={loading}
-            >
-              {loading ? "Verifying..." : "Verify OTP"}
-            </Button>
-          )}
+          <Button 
+            onClick={!isOtpSent ? handleSendOtpEmail : handleVerifyOtp}
+            className="w-full"
+            disabled={loading}
+          >
+            {loading 
+              ? (isOtpSent ? "Verifying..." : "Sending...") 
+              : (isOtpSent ? "Verify OTP" : "Send OTP")}
+          </Button>
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
