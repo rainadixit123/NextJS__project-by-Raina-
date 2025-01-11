@@ -1,16 +1,16 @@
-import NextAuth from "next-auth";
-import type { NextAuthOptions } from "next-auth";
-import GoogleProvider from "next-auth/providers/google";
-import CredentialsProvider from "next-auth/providers/credentials";
-import { sendOtpEmail, verifyOtp } from "@/utils/auth";
-import dbConnect from "@/lib/dbconnect";
-import User from "@/models/User";
+import NextAuth from "next-auth"
+import type { AuthOptions } from "next-auth"
+import GoogleProvider from "next-auth/providers/google"
+import CredentialsProvider from "next-auth/providers/credentials"
+import { sendOtpEmail, verifyOtp } from "@/utils/auth"
+import dbConnect from "@/lib/dbconnect"
+import User from "@/models/User"
 
-export const authOptions: NextAuthOptions = {
+const authOptions: AuthOptions = {
   providers: [
     GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID as string,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
     CredentialsProvider({
       name: "Email OTP",
@@ -20,46 +20,46 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email) {
-          throw new Error("Email is required");
+          throw new Error("Email is required")
         }
 
         try {
-          await dbConnect();
+          await dbConnect()
 
-          // If OTP is not provided, send a new one
           if (!credentials.otp) {
-            const result = await sendOtpEmail(credentials.email);
+            const result = await sendOtpEmail(credentials.email)
             if (!result.success) {
-              throw new Error(result.message || "Failed to send OTP");
+              throw new Error(result.message || "Failed to send OTP")
             }
-            return null; // Return null to show OTP input field
+            return null
           }
 
-          // Verify OTP
-          const verificationResult = await verifyOtp(credentials.email, credentials.otp);
+          const verificationResult = await verifyOtp(
+            credentials.email,
+            credentials.otp
+          )
           if (!verificationResult.success) {
-            throw new Error("Invalid or expired OTP");
+            throw new Error("Invalid or expired OTP")
           }
 
-          // Find or create user
-          let user = await User.findOne({ email: credentials.email });
+          let user = await User.findOne({ email: credentials.email })
 
           if (!user) {
             user = await User.create({
               email: credentials.email,
               role: "user",
               createdAt: new Date(),
-            });
+            })
           }
 
           return {
             id: user._id.toString(),
             email: user.email,
             role: user.role,
-          };
+          }
         } catch (error) {
-          console.error("Authorization error:", error);
-          throw error;
+          console.error("Authorization error:", error)
+          throw error
         }
       },
     }),
@@ -68,57 +68,57 @@ export const authOptions: NextAuthOptions = {
     async signIn({ user, account }) {
       try {
         if (account?.provider === "google") {
-          await dbConnect();
+          await dbConnect()
           
-          const existingUser = await User.findOne({ email: user.email });
-
+          const existingUser = await User.findOne({ email: user.email })
+          
           if (!existingUser) {
             await User.create({
               email: user.email,
               role: "user",
               createdAt: new Date(),
-            });
+            })
           }
         }
-        return true;
+        return true
       } catch (error) {
-        console.error("Sign in callback error:", error);
-        return false;
+        console.error("Sign in callback error:", error)
+        return false
       }
     },
     async session({ session, token }) {
       try {
         if (session.user) {
-          await dbConnect();
-          const user = await User.findOne({ email: session.user.email });
-          
-          if (user) {
-            // session.user.id = user._id.toString();
-            session.user.role = user.role || "user";
+          session.user = {
+            ...session.user,
+            id: token.sub,
+            role: token.role as string || "user",
           }
         }
-        return session;
+        return session
       } catch (error) {
-        console.error("Session callback error:", error);
-        return session;
+        console.error("Session callback error:", error)
+        return session
       }
     },
     async jwt({ token, user }) {
       if (user) {
-        token.role = user.role;
+        token.role = user.role
       }
-      return token;
+      return token
     },
   },
   pages: {
     signIn: "/login",
-    error: "/login"
+    error: "/login",
   },
   session: {
     strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   secret: process.env.NEXTAUTH_SECRET,
-};
+}
 
-const handler = NextAuth(authOptions);
-export { handler as GET, handler as POST };
+const handler = NextAuth(authOptions)
+export const GET = handler
+export const POST = handler
